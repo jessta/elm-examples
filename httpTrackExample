@@ -1,0 +1,125 @@
+module Main exposing (main)
+
+import Browser
+import Html exposing (Html, pre, text)
+import Http
+
+
+
+-- MAIN
+
+
+main =
+    Browser.element
+        { init = init
+        , update = update
+        , subscriptions = subscriptions
+        , view = view
+        }
+
+
+
+-- MODEL
+
+
+type Model
+    = Failure
+    | Loading { tracker : String, progress : Http.Progress }
+    | Success String
+
+
+init : () -> ( Model, Cmd Msg )
+init _ =
+    ( Loading
+        { tracker = "tracker name"
+        , progress =
+            Http.Receiving
+                { received = 0
+                , size = Nothing
+                }
+        }
+    , Http.request
+        { method = "GET"
+        , headers = []
+        , url = "https://elm-lang.org/assets/public-opinion.txt"
+        , body = Http.emptyBody
+        , expect = Http.expectString GotText
+        , timeout = Nothing
+        , tracker = Just "tracker name"
+        }
+    )
+
+
+
+-- UPDATE
+
+
+type Msg
+    = GotText (Result Http.Error String)
+    | Progress Http.Progress
+
+
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg model =
+    case msg of
+        Progress progress ->
+            case model of
+                Loading state ->
+                    ( Loading { state | progress = progress }, Cmd.none )
+
+                Success _ ->
+                    ( model, Cmd.none )
+
+                Failure ->
+                    ( model, Cmd.none )
+
+        GotText result ->
+            case result of
+                Ok fullText ->
+                    ( Success fullText, Cmd.none )
+
+                Err _ ->
+                    ( Failure, Cmd.none )
+
+
+
+-- SUBSCRIPTIONS
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    case model of
+        Loading state ->
+            Http.track state.tracker Progress
+
+        Failure ->
+            Sub.none
+
+        Success _ ->
+            Sub.none
+
+
+
+-- VIEW
+
+
+view : Model -> Html Msg
+view model =
+    case model of
+        Failure ->
+            text "I was unable to load your book."
+
+        Loading state ->
+            text
+                ("Loading..."
+                    ++ (case state.progress of
+                            Http.Receiving progress ->
+                                String.fromFloat (Http.fractionReceived progress) ++ "%"
+
+                            Http.Sending _ ->
+                                ""
+                       )
+                )
+
+        Success fullText ->
+            pre [] [ text fullText ]
